@@ -1,0 +1,309 @@
+🎵 MissingPieceMusicDashboard
+
+A Node.js + PostgreSQL data pipeline for ingesting artist & track metrics (Chartmetric), storing weekly snapshots, and exporting agency-style Weekly Artist Tracking CSV reports that match a predefined spreadsheet format.
+
+1. What This Project Does (High Level)
+
+This system solves one problem:
+
+Automatically generate weekly artist tracking spreadsheets that match your agency’s exact reporting format.
+
+It does this by:
+
+Ingesting artist + track data
+
+Spotify followers & monthly listeners
+
+Instagram, TikTok, YouTube followers
+
+Track-level listener & save metrics
+
+Storing weekly snapshots in Postgres
+
+Computing deltas
+
+7-day growth
+
+28-day growth
+
+Percent change
+
+Exporting CSVs
+
+Column-for-column compatible with your goal spreadsheet
+
+One CSV per artist
+
+Scaling to batches
+
+Run 1–20 artists at once
+
+Safe to run weekly
+
+2. Architecture Overview
+Chartmetric API
+      |
+      v
+┌──────────────────────────┐
+│ Ingestion Services       │
+│                          │
+│ ingestChartmetric.js     │
+│ ingestTracks.js          │
+│ ingestTrackWeeklyStats.js│
+└───────────┬──────────────┘
+            v
+┌──────────────────────────┐
+│ PostgreSQL (Snapshots)   │
+│                          │
+│ Artist                   │
+│ WeeklyArtistSnapshots    │
+│ Track                    │
+│ TrackWeeklySnapshots     │
+└───────────┬──────────────┘
+            v
+┌──────────────────────────┐
+│ Report Builder           │
+│                          │
+│ buildWeeklyArtistReport  │
+└───────────┬──────────────┘
+            v
+┌──────────────────────────┐
+│ CSV Renderer + Exporter  │
+│                          │
+│ weeklyArtistCsv.renderer │
+│ exportCsv.js             │
+└───────────┬──────────────┘
+            v
+   outputExports/*.csv
+
+3. Requirements
+Software
+
+Node.js v18+ (v20+ recommended)
+
+PostgreSQL v13+
+
+npm
+
+APIs
+
+Chartmetric account
+
+CHARTMETRIC_API_TOKEN or
+
+CHARTMETRIC_REFRESH_TOKEN
+
+⚠️ The system still works offline if Chartmetric is unavailable.
+
+4. Installation
+git clone <repo-url>
+cd MissingPieceMusicDashboard
+npm install
+
+5. Environment Variables
+
+Create a .env file in the project root:
+
+DATABASE_URL=postgres://user:password@localhost:5432/music_dashboard
+OUTPUT_DIR=outputExports
+
+# Chartmetric (optional)
+CHARTMETRIC_API_TOKEN=
+CHARTMETRIC_REFRESH_TOKEN=
+
+Optional flags
+OFFLINE=true
+
+
+OFFLINE mode
+
+skips all Chartmetric API calls
+
+uses only existing DB data
+
+lets you continue building reports while tokens are broken
+
+6. Database Setup
+
+Ensure Postgres is running and your database exists:
+
+createdb music_dashboard
+
+
+The app uses Sequelize and will auto-create tables on first run.
+
+7. Core Data Models (Important)
+Artist
+
+One row per artist
+
+Links everything else
+
+WeeklyArtistSnapshot
+
+One row per artist per week
+
+Metrics:
+
+spotifyFollowers
+
+spotifyMonthlyListeners
+
+instagramFollowers
+
+tiktokFollowers
+
+youtubeSubscribers
+
+Track
+
+One row per track per artist
+
+TrackWeeklySnapshot
+
+One row per track per week
+
+Metrics:
+
+spotifyListeners
+
+spotifySaves
+
+spotifySaveRate
+
+8. Running the System (Single Artist)
+8.1 Offline (Recommended while Chartmetric is broken)
+OFFLINE=true node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks
+
+
+This will:
+
+connect to DB
+
+read existing snapshots
+
+compute growth
+
+export CSV
+
+8.2 Online (Chartmetric working)
+node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks
+
+
+This will:
+
+fetch artist metrics
+
+backfill up to 12 weeks
+
+ingest tracks
+
+export CSV
+
+9. Batch Mode (Multiple Artists)
+9.1 Configure artists
+
+Edit config/artists.json:
+
+[
+  { "name": "Brian Dunne", "chartmetricArtistId": 296956 },
+  { "name": "David Wilcox" },
+  { "name": "Ethan Daniel Davidson" }
+]
+
+9.2 Run batch
+OFFLINE=true node scripts/runBatchIngestAndExport.js
+
+
+Each artist gets:
+
+outputExports/<Artist Name> - Weekly Artist Tracking.csv
+
+10. Track Listener Data (Important Limitation)
+Current status
+
+Tracks exist
+
+Track weekly snapshots exist
+
+Listener values are NULL because:
+
+Chartmetric /track/:id/stat/spotify requires a valid token
+
+When Chartmetric is fixed
+
+Run:
+
+node scripts/ingestTrackWeeklyStats.js --artist="Brian Dunne" --weeks=12
+
+
+Then re-export:
+
+node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks
+
+11. How CSV Output Maps to the Goal Spreadsheet
+Spreadsheet Section	Source
+Spotify followers	WeeklyArtistSnapshot.spotifyFollowers
+Spotify monthly listeners	WeeklyArtistSnapshot.spotifyMonthlyListeners
+7-day growth	current − previous week
+28-day growth	current − 4 weeks ago
+% change	computed
+Track rows	Track + TrackWeeklySnapshot
+Listener history columns	listenerHistory array
+Social followers	Instagram/TikTok/YouTube snapshots
+
+The renderer intentionally mirrors the spreadsheet layout.
+
+12. File-by-File Breakdown (Critical)
+scripts/
+File	Purpose
+runIngestAndExport.js	Main entrypoint
+runBatchIngestAndExport.js	Batch runner
+ingestTrackWeeklyStats.js	Track-level history fetch
+src/services/ingestion/
+File	Purpose
+ingestChartmetric.js	Artist metrics
+ingestTracks.js	Track list ingestion
+ingestTrackWeeklyStats.js	Track listener history
+src/reports/
+File	Purpose
+buildWeeklyArtistReport.js	Computes report object
+src/renderers/
+File	Purpose
+weeklyArtistCsv.renderer.js	Spreadsheet layout
+src/services/export/
+File	Purpose
+exportCsv.js	Writes CSV
+13. Common Errors & Fixes
+❌ Refresh token does not exist
+
+Token revoked or malformed
+
+Contact Chartmetric support
+
+Use OFFLINE=true meanwhile
+
+❌ Duplicate weekly snapshot
+
+Snapshot already exists
+
+Safe — upsert logic handles it
+
+❌ Tracks not showing in CSV
+
+TrackWeeklySnapshots exist but listener values are NULL
+
+Expected until track stats endpoint works
+
+14. Recommended Weekly Workflow
+
+Ensure Chartmetric token is valid
+
+Run batch:
+
+node scripts/runBatchIngestAndExport.js
+
+
+Review CSVs
+
+Deliver to team
