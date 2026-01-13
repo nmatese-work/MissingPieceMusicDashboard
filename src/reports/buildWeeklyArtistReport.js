@@ -60,6 +60,10 @@ function buildWeeklyArtistReport({ artistName, snapshots = [], tracks = [] }) {
           type: 'metric',
           label: track.title,
           ...metric,
+          // Additional track-specific fields for CSV rendering
+          currentListeners: track.currentListeners ?? null,
+          currentSaves: track.currentSaves ?? null,
+          saveRate: track.saveRate ?? null,
         });
       }
 

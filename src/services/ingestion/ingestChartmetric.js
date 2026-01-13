@@ -71,12 +71,19 @@ async function ingestArtistByName({ name }) {
   }
 
   // 4️⃣ Pull socials safely (non-fatal)
+  // Using correct field parameters based on Chartmetric API docs
   const instagramFollowers =
-    await cmService.fetchLatestSocialStat(cmArtist.id, 'instagram');
+    await cmService.fetchLatestSocialStat(cmArtist.id, 'instagram', 'followers');
   const tiktokFollowers =
-    await cmService.fetchLatestSocialStat(cmArtist.id, 'tiktok');
+    await cmService.fetchLatestSocialStat(cmArtist.id, 'tiktok', 'followers');
+  const tiktokLikes =
+    await cmService.fetchTikTokLikes(cmArtist.id); // Uses field=likes internally
+  const twitterFollowers =
+    await cmService.fetchLatestSocialStat(cmArtist.id, 'twitter', 'followers');
+  const facebookFollowers =
+    await cmService.fetchLatestSocialStat(cmArtist.id, 'facebook', 'likes'); // Facebook uses 'likes', not 'followers'
   const youtubeSubscribers =
-    await cmService.fetchLatestSocialStat(cmArtist.id, 'youtube');
+    await cmService.fetchLatestSocialStat(cmArtist.id, 'youtube_channel', 'subscribers');
 
   // 5️⃣ Update artist row (best-effort)
   try {
@@ -100,6 +107,9 @@ async function ingestArtistByName({ name }) {
 
     instagramFollowers,
     tiktokFollowers,
+    tiktokLikes,
+    twitterFollowers,
+    facebookFollowers,
     youtubeSubscribers,
   });
 

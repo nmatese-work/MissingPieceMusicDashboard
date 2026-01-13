@@ -33,6 +33,10 @@ module.exports = (sequelize, DataTypes) => {
           type: DataTypes.FLOAT,
           allowNull: true,
         },
+        youtubeViews: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
       },
       {
         tableName: 'TrackWeeklySnapshots',

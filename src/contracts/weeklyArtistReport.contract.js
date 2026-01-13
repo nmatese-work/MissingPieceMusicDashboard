@@ -18,8 +18,11 @@ module.exports = {
       spotifyMonthlyListeners: 'number|null',
   
       // Socials
+      twitterFollowers: 'number|null',
+      facebookFollowers: 'number|null',
       instagramFollowers: 'number|null',
       tiktokFollowers: 'number|null',
+      tiktokLikes: 'number|null',
       youtubeSubscribers: 'number|null',
   
       // Optional / future

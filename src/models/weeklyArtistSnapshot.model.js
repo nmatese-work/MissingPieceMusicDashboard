@@ -17,7 +17,10 @@ module.exports = (sequelize, DataTypes) => {
     spotifyFollowers: DataTypes.INTEGER,
 
     tiktokFollowers: DataTypes.INTEGER,
+    tiktokLikes: DataTypes.INTEGER,
     instagramFollowers: DataTypes.INTEGER,
+    twitterFollowers: DataTypes.INTEGER,
+    facebookFollowers: DataTypes.INTEGER,
     youtubeSubscribers: DataTypes.INTEGER,
   }, {
     indexes: [

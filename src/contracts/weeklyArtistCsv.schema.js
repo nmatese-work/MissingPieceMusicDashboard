@@ -58,6 +58,18 @@ module.exports = {
         title: 'Socials',
         rows: [
           {
+            label: 'Twitter Followers',
+            field: 'twitterFollowers',
+            source: 'weeklySnapshot',
+            format: 'integer',
+          },
+          {
+            label: 'Facebook Followers',
+            field: 'facebookFollowers',
+            source: 'weeklySnapshot',
+            format: 'integer',
+          },
+          {
             label: 'Instagram Followers',
             field: 'instagramFollowers',
             source: 'weeklySnapshot',
@@ -66,6 +78,12 @@ module.exports = {
           {
             label: 'TikTok Followers',
             field: 'tiktokFollowers',
+            source: 'weeklySnapshot',
+            format: 'integer',
+          },
+          {
+            label: 'TikTok Likes',
+            field: 'tiktokLikes',
             source: 'weeklySnapshot',
             format: 'integer',
           },

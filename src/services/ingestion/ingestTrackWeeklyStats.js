@@ -4,9 +4,13 @@ const cmClient = require('../../config/chartmetric.client');
 const db = require('../../models');
 
 function normalizePoint(p) {
+  // Updated to handle new track stats API response format
+  // Response: { value: Integer, timestp: Date, daily_diff?: Integer, interpolated?: Boolean }
   const date = p.timestp ?? p.date ?? p.start ?? p.week ?? p.datetime ?? p.t ?? null;
   const value = p.value ?? p.value_int ?? p.value_number ?? p.v ?? p.val ?? p.listeners ?? p.followers ?? null;
-  const isInterpolated = p.is_interpolated === true || p.is_interpolated === 'true' || p.is_interpolated === 1 || p.is_interpolated === '1' ? true : (p.is_interpolated === false || p.is_interpolated === 0 || p.is_interpolated === '0' ? false : undefined);
+  const isInterpolated = p.interpolated === true || p.interpolated === 'true' || p.interpolated === 1 || p.interpolated === '1' 
+    ? true 
+    : (p.interpolated === false || p.interpolated === 0 || p.interpolated === '0' ? false : undefined);
   return { dateISO: date, value: value == null ? null : Number(value), isInterpolated };
 }
 
@@ -26,16 +30,23 @@ async function ingestTrackWeeklyStats({ artistId, weeks = 12 }) {
     const cmId = t.chartmetricTrackId;
     if (!cmId) continue;
 
-    // try track stat endpoint first
+    // try track stat endpoint using new API: /track/:id/spotify/stats/:mode
     let points = [];
     try {
-      const res = await cmClient.get(`/track/${cmId}/stat/spotify`);
+      // Use the new track stats endpoint with type=streams
+      const res = await cmClient.get(`/track/${cmId}/spotify/stats/highest-playcounts`, {
+        params: { type: 'streams' }
+      });
       const obj = res.data?.obj ?? res.data ?? null;
-      if (obj && Array.isArray(obj.listeners)) points = obj.listeners;
-      else if (obj && Array.isArray(obj.followers)) points = obj.followers;
-      else if (Array.isArray(obj)) points = obj;
+      // Response structure: [{ domain: "spotify", data: [{ value, timestp }] }]
+      if (Array.isArray(obj) && obj.length > 0) {
+        const trackData = obj[0];
+        if (Array.isArray(trackData.data)) {
+          points = trackData.data;
+        }
+      }
     } catch (err) {
-      // ignore
+      // ignore - will fallback to metadata
     }
 
     // fallback: try /track/{id} cm_statistics (single totals)

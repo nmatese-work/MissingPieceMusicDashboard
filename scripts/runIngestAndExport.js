@@ -166,6 +166,9 @@ async function main() {
       tracksForReport.push({
         title: t.title || t.name || 'Untitled',
         listenerHistory: trackSnaps.map(s => s.spotifyListeners ?? null),
+        currentListeners: trackSnaps[0]?.spotifyListeners ?? null,
+        currentSaves: trackSnaps[0]?.spotifySaves ?? null,
+        saveRate: trackSnaps[0]?.spotifySaveRate ?? null,
       });
     }
   }

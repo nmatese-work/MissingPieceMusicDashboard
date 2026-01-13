@@ -103,21 +103,34 @@ async function ingestTracksForArtist(arg1, arg2 = {}) {
 
     // Playlist placements
     try {
-      const playlists = await chartmetric.fetchTrackPlaylists(String(chartmetricTrackId), { status: 'past' });
-      for (const p of playlists) {
+      // Fetch current playlists (most relevant)
+      const playlists = await chartmetric.fetchTrackPlaylists(
+        String(chartmetricTrackId), 
+        'spotify', 
+        'current',
+        { editorial: true, limit: 100 } // Get editorial playlists, limit to avoid too much data
+      );
+      for (const entry of playlists) {
+        // API response structure: { playlist: {...}, track: {...} }
+        const playlist = entry.playlist || entry;
+        const playlistName = playlist.name || playlist.playlist_name || 'Unknown';
+        const addedAt = playlist.added_at || playlist.addedAt || null;
+        const followers = playlist.followers || null;
+        const curator = playlist.owner_name || playlist.curator_name || playlist.curator || null;
+
         await db.TrackPlaylist.findOrCreate({
           where: {
             trackId: track.id,
-            playlistName: p.playlistName || p.name || 'Unknown',
-            addedAt: p.addedAt ? new Date(p.addedAt) : null,
+            playlistName: playlistName,
+            addedAt: addedAt ? new Date(addedAt) : null,
           },
           defaults: {
             trackId: track.id,
-            playlistName: p.playlistName || p.name || 'Unknown',
-            followers: p.followers ?? null,
-            addedAt: p.addedAt ? new Date(p.addedAt) : null,
-            curator: p.curator ?? null,
-            meta: p.raw ?? p,
+            playlistName: playlistName,
+            followers: followers,
+            addedAt: addedAt ? new Date(addedAt) : null,
+            curator: curator,
+            meta: entry, // Store full entry for reference
           },
         });
       }
