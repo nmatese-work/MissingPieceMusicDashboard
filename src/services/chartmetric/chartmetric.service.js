@@ -14,62 +14,52 @@ class ChartmetricService {
    */
   async findArtistByName(name) {
     if (!name) return null;
-
-    // throttle ALL Chartmetric calls (using default 5 seconds to avoid rate limiting)
+  
     await throttle();
-
+  
     try {
+      console.log("Sending Name Search Query");
+  
       const res = await this.client.get('/search', {
         params: {
           q: name,
-          type: 'artist',
-          limit: 5,
+          type: 'artists',
+          limit: 1,
         },
       });
-
+  
+      console.log(
+        "Received Name Search Response:",
+        JSON.stringify(res.data, null, 2)
+      );
+  
       const body = res.data;
-
-      // Shape 1: { data: [...] }
+  
+      // ✅ Chartmetric CURRENT response shape
+      if (Array.isArray(body?.obj?.artists)) {
+        return body.obj.artists[0] ?? null;
+      }
+  
+      // Legacy / alternate shapes
       if (Array.isArray(body?.data)) {
         return body.data[0] ?? null;
       }
-
-      // Shape 2: { data: { artists: { data: [...] } } }
+  
       if (Array.isArray(body?.data?.artists?.data)) {
         return body.data.artists.data[0] ?? null;
       }
-
-      // Shape 3: { artists: { data: [...] } }
+  
       if (Array.isArray(body?.artists?.data)) {
         return body.artists.data[0] ?? null;
       }
-
+  
       return null;
     } catch (err) {
-      // fallback endpoint
-      try {
-        await throttle(); // Using default 5 seconds to avoid rate limiting
-
-        const r2 = await this.client.get('/artist/search', {
-          params: { q: name, limit: 5 },
-        });
-
-        const body = r2.data;
-
-        if (Array.isArray(body?.data)) {
-          return body.data[0] ?? null;
-        }
-
-        if (Array.isArray(body?.artists?.data)) {
-          return body.artists.data[0] ?? null;
-        }
-
-        return null;
-      } catch (_) {
-        return null;
-      }
+      console.warn(`Chartmetric search failed for "${name}":`, err.message);
+      return null;
     }
   }
+  
 
   /**
    * Fetch the most recent social stat for a platform
