@@ -1,1 +1,81 @@
 
+
+# README_multipleArtists (Run Multiple Artists)
+
+## When to Use This
+
+Use this when you want reports for **many artists at once**.
+
+---
+
+## Step 1: Add Artists to the List
+
+Open the file:
+
+```
+artists.txt
+```
+
+Add **one artist per line**:
+
+```
+Brian Dunne
+Fantastic Cat
+David Wilcox
+```
+
+Save the file.
+
+---
+
+## Step 2: Run the Batch Report
+
+Basic command:
+
+```
+node scripts/runBatchIngestAndExport.js
+```
+
+Recommended (lets you confirm each artist):
+
+```
+node scripts/runBatchIngestAndExport.js --interactive
+```
+
+---
+
+## What Happens Next
+
+* Each artist gets their own CSV
+* A combined CSV is also created
+* This process can take **10–30 minutes** depending on the number of artists
+
+---
+
+## Output Files
+
+You will see:
+
+```
+outputExports/
+Artist 1 - Weekly Artist Tracking.csv
+Artist 2 - Weekly Artist Tracking.csv
+Weekly Artist Tracking - All Artists.csv
+```
+
+---
+
+## If the Process Stops
+
+You can safely re-run the command. Already-saved data will not be lost.
+
+---
+
+## Weekly Recommended Workflow
+
+1. Refresh token (if needed)
+2. Run batch command
+3. Open CSVs
+4. Send to team
+
+That’s it.

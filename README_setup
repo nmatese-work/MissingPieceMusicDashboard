@@ -1,1 +1,187 @@
 
+# README_setup (First-Time Setup Guide)
+
+## Who This Is For
+
+This guide is for **first-time setup**. You only need to do this **once per computer**.
+
+If you just want to run reports for artists, you can skip this and use:
+
+* `README_singleArtist`
+* `README_multipleArtists`
+
+---
+
+## What You Will End Up With
+
+By the end of this setup, you will be able to:
+
+* Run one command
+* Automatically get a finished **CSV report** for an artist
+
+No coding knowledge is required.
+
+---
+
+## Step 1: Install Required Software
+
+### 1. Install Node.js
+
+You have **two options**. Use **Option A** if you are comfortable copy‑pasting commands. Use **Option B** if you prefer downloading an installer.
+
+---
+
+#### Option A: Install Node.js from the Terminal (Recommended)
+
+**macOS**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install node
+```
+
+**Windows (PowerShell – Run as Administrator)**
+
+```powershell
+winget install CoreyButler.NVMforWindows
+nvm install 20
+nvm use 20
+```
+
+**Linux (Ubuntu / Debian)**
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+Verify installation:
+
+```bash
+node --version
+npm --version
+```
+
+If both show numbers, Node.js is installed.
+
+---
+
+#### Option B: Install Node.js Using a Website
+
+1. Go to [https://nodejs.org/](https://nodejs.org/)
+2. Download the **LTS version**
+3. Install using default options
+
+Verify:
+
+```bash
+node --version
+```
+
+---
+
+### 2. Install PostgreSQL
+
+* Go to: [https://www.postgresql.org/download/](https://www.postgresql.org/download/)
+* Install using default options
+* Remember the **password** you choose during install
+
+After installing, open Terminal and run:
+
+```
+psql --version
+```
+
+---
+
+### 3. Install Git
+
+* Go to: [https://git-scm.com/](https://git-scm.com/)
+* Install using default options
+
+---
+
+## Step 2: Download the Project
+
+1. Open Terminal
+2. Copy and paste:
+
+```
+git clone <REPO_URL>
+cd MissingPieceMusicDashboard
+```
+
+(Replace `<REPO_URL>` with the GitHub link provided to you.)
+
+---
+
+## Step 3: Install Project Files
+
+Run:
+
+```
+npm install
+```
+
+This may take a few minutes. You only need to do this once.
+
+---
+
+## Step 4: Create the Environment File
+
+1. In the project folder, create a file called `.env`
+2. Paste this inside (we will fill it in next):
+
+```
+DATABASE_URL=postgres://postgres:YOUR_PASSWORD@localhost:5432/music_dashboard
+CHARTMETRIC_REFRESH_TOKEN=PASTE_REFRESH_TOKEN_HERE
+CHARTMETRIC_ACCESS_TOKEN=PASTE_ACCESS_TOKEN_HERE
+OUTPUT_DIR=outputExports
+```
+
+---
+
+## Step 5: Set Up the Database
+
+Run these commands **one at a time**:
+
+```
+createdb music_dashboard
+node scripts/testDb.js
+```
+
+If you see a success message, the database is ready.
+
+---
+
+## Step 6: Set Up Chartmetric Access
+
+1. Log into Chartmetric
+2. Copy your **Refresh Token**
+3. Paste it into the `.env` file
+
+Then run:
+
+```
+node scripts/exchange_chartmetric_token.js
+```
+
+Copy the `access_token` shown in the Terminal and paste it into `.env`.
+
+Test it:
+
+```
+node scripts/testChartmetricAuth.js
+```
+
+---
+
+## Setup Complete ✅
+
+You never need to do this again unless:
+
+* You switch computers
+* Your Chartmetric token expires
+
+---
+

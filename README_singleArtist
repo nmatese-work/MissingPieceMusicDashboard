@@ -1,1 +1,75 @@
 
+# README_singleArtist (Run One Artist)
+
+## When to Use This
+
+Use this when you want a report for **one artist**.
+
+---
+
+## Step 1: Open Terminal
+
+Navigate to the project folder:
+
+```
+cd MissingPieceMusicDashboard
+```
+
+---
+
+## Step 2: Run the Artist Report
+
+Basic command:
+
+```
+node scripts/runIngestAndExport.js "Artist Name"
+```
+
+Example:
+
+```
+node scripts/runIngestAndExport.js "Brian Dunne"
+```
+
+---
+
+## Optional Options
+
+### Include Track-Level Data
+
+```
+node scripts/runIngestAndExport.js "Brian Dunne" --tracks
+```
+
+### Choose Artist Manually (Recommended)
+
+```
+node scripts/runIngestAndExport.js "Brian Dunne" --interactive
+```
+
+---
+
+## Where the File Goes
+
+Your CSV will appear here:
+
+```
+outputExports/
+Brian Dunne - Weekly Artist Tracking.csv
+```
+
+Open it in Excel or Google Sheets.
+
+---
+
+## If Something Goes Wrong
+
+* If you see **jwt expired** → refresh the token:
+
+```
+node scripts/exchange_chartmetric_token.js
+```
+
+Then run the artist again.
+
+---
