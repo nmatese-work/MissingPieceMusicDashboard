@@ -1,3 +1,8 @@
+** THIS IS A GENERAL README, FOR FIRST TIME SETUP OR RUNNING INSTRUCTIONS GO TO: **
+  README_setup
+  README_singleArtist
+  README_multipleArtist
+
 # 🎵 MissingPieceMusicDashboard
 
 A Node.js + PostgreSQL data pipeline for ingesting artist & track metrics from Chartmetric, storing weekly snapshots, and exporting agency-style Weekly Artist Tracking CSV reports.
