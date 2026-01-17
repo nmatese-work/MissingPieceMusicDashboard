@@ -151,8 +151,68 @@ psql --version
 
 ### 3. Install Git
 
-* Go to: [https://git-scm.com/](https://git-scm.com/)
-* Install using default options
+Git is only used once to **download the project**. You do not need to learn Git.
+
+You have **two options**.
+
+---
+
+#### Option A: Install Git from the Terminal (Recommended)
+
+**macOS (Homebrew)**
+
+```bash
+brew install git
+```
+
+Verify:
+
+```bash
+git --version
+```
+
+---
+
+**Windows (PowerShell – Run as Administrator)**
+
+```powershell
+winget install Git.Git
+```
+
+Restart PowerShell, then verify:
+
+```powershell
+git --version
+```
+
+---
+
+**Linux (Ubuntu / Debian)**
+
+```bash
+sudo apt update
+sudo apt install -y git
+```
+
+Verify:
+
+```bash
+git --version
+```
+
+---
+
+#### Option B: Install Git Using a Website
+
+1. Go to [https://git-scm.com/](https://git-scm.com/)
+2. Download the installer
+3. Install using default options
+
+Verify:
+
+```bash
+git --version
+```
 
 ---
 
