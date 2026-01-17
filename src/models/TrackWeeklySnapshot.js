@@ -37,6 +37,35 @@ module.exports = (sequelize, DataTypes) => {
           type: DataTypes.INTEGER,
           allowNull: true,
         },
+        // Additional track metrics from cm_statistics
+        tiktokVideos: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        spotifyPlaylists: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        spotifyEditorialPlaylists: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        appleMusicPlaylists: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        appleMusicEditorialPlaylists: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        spotifyPlaylistReach: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
+        shazamCounts: {
+          type: DataTypes.INTEGER,
+          allowNull: true,
+        },
       },
       {
         tableName: 'TrackWeeklySnapshots',

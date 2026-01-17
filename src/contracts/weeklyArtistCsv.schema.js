@@ -40,6 +40,25 @@ module.exports = {
           },
         ],
       },
+
+      {
+        title: 'Apple Music',
+        optional: true, // Omit if no Apple Music data
+        rows: [
+          {
+            label: 'Apple Music followers',
+            field: 'appleMusicFollowers',
+            source: 'weeklySnapshot',
+            format: 'integer',
+          },
+          {
+            label: 'Apple Music listeners',
+            field: 'appleMusicListeners',
+            source: 'weeklySnapshot',
+            format: 'integer',
+          },
+        ],
+      },
   
       {
         title: 'Tracks',

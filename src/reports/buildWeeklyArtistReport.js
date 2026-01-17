@@ -34,9 +34,20 @@ function buildWeeklyArtistReport({ artistName, snapshots = [], tracks = [] }) {
     (a, b) => new Date(b.weekStartDate) - new Date(a.weekStartDate)
   );
 
-  const weeks = orderedSnapshots.map(s =>
+  // Create two versions: short labels for display, full dates for CSV headers
+  const weekLabels = orderedSnapshots.map(s =>
     formatWeekLabel(s.weekStartDate)
   );
+  const weekDates = orderedSnapshots.map(s => {
+    if (!s.weekStartDate) return '';
+    try {
+      const d = new Date(s.weekStartDate);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+    } catch (e) {
+      return '';
+    }
+  });
 
   const rows = [];
   const precision = schema.growthColumns.percentPrecision;
@@ -64,6 +75,17 @@ function buildWeeklyArtistReport({ artistName, snapshots = [], tracks = [] }) {
           currentListeners: track.currentListeners ?? null,
           currentSaves: track.currentSaves ?? null,
           saveRate: track.saveRate ?? null,
+          // Additional metrics
+          tiktokVideos: track.tiktokVideos ?? null,
+          spotifyPlaylists: track.spotifyPlaylists ?? null,
+          spotifyEditorialPlaylists: track.spotifyEditorialPlaylists ?? null,
+          appleMusicPlaylists: track.appleMusicPlaylists ?? null,
+          appleMusicEditorialPlaylists: track.appleMusicEditorialPlaylists ?? null,
+          spotifyPlaylistReach: track.spotifyPlaylistReach ?? null,
+          shazamCounts: track.shazamCounts ?? null,
+          youtubeViews: track.youtubeViews ?? null,
+          // Playlist additions
+          playlistsAdded: track.playlistsAdded || [],
         });
       }
 
@@ -90,7 +112,8 @@ function buildWeeklyArtistReport({ artistName, snapshots = [], tracks = [] }) {
 
   return {
     artistName,
-    weeks,
+    weeks: weekLabels, // Short format for internal use
+    weekDates, // Full dates for CSV headers
     rows,
   };
 }

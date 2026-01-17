@@ -12,52 +12,57 @@ class ChartmetricService {
    * Robust artist search
    * Handles ALL known Chartmetric response shapes
    */
-  async findArtistByName(name) {
-    if (!name) return null;
-  
-    await throttle();
-  
+  /**
+   * Search for artists by name, returns array of results
+   */
+  async searchArtistsByName(name, limit = 10) {
+    if (!name) return [];
+
+    await throttle(10000);
+
     try {
-      console.log("Sending Name Search Query");
-  
       const res = await this.client.get('/search', {
         params: {
           q: name,
           type: 'artists',
-          limit: 1,
+          limit: limit,
         },
       });
-  
-      console.log(
-        "Received Name Search Response:",
-        JSON.stringify(res.data, null, 2)
-      );
-  
+
       const body = res.data;
-  
+
       // ✅ Chartmetric CURRENT response shape
       if (Array.isArray(body?.obj?.artists)) {
-        return body.obj.artists[0] ?? null;
+        return body.obj.artists;
       }
-  
+
       // Legacy / alternate shapes
       if (Array.isArray(body?.data)) {
-        return body.data[0] ?? null;
+        return body.data;
       }
-  
+
       if (Array.isArray(body?.data?.artists?.data)) {
-        return body.data.artists.data[0] ?? null;
+        return body.data.artists.data;
       }
-  
+
       if (Array.isArray(body?.artists?.data)) {
-        return body.artists.data[0] ?? null;
+        return body.artists.data;
       }
-  
-      return null;
+
+      return [];
     } catch (err) {
       console.warn(`Chartmetric search failed for "${name}":`, err.message);
-      return null;
+      return [];
     }
+  }
+
+  /**
+   * Find artist by name - returns first match (for backward compatibility)
+   * For interactive selection, use searchArtistsByName and promptUserForArtistSelection
+   */
+  async findArtistByName(name) {
+    const results = await this.searchArtistsByName(name, 1);
+    return results[0] ?? null;
   }
   
 
@@ -77,8 +82,8 @@ class ChartmetricService {
   async fetchLatestSocialStat(cmArtistId, platform, field = null) {
     if (!cmArtistId || !platform) return null;
 
-    // Increased throttle to 5-10 seconds to avoid rate limiting
-    await throttle(5000);
+    // Increased throttle to 10 seconds to avoid rate limiting
+    await throttle(10000);
 
     try {
       const params = {};
@@ -135,7 +140,7 @@ class ChartmetricService {
   async fetchTikTokLikesHistory(cmArtistId, since = null, until = null) {
     if (!cmArtistId) return [];
 
-    await throttle(5000);
+    await throttle(10000);
 
     try {
       const params = { field: 'likes' };
@@ -166,7 +171,7 @@ class ChartmetricService {
   async fetchArtistStatHistory(cmArtistId, platform, field = null, since = null, until = null) {
     if (!cmArtistId || !platform) return [];
 
-    await throttle(5000);
+    await throttle(10000);
 
     try {
       const params = {};
@@ -218,16 +223,17 @@ class ChartmetricService {
   async fetchTrackStats(cmTrackId, mode = 'highest-playcounts') {
     if (!cmTrackId) return null;
 
-    await throttle(5000);
+    await throttle(10000);
 
     try {
       // Get track metadata first (includes cm_statistics with playlist reach)
+      // Note: This is already throttled by the throttle() call at the start of the function
       const metadataRes = await this.client.get(`/track/${cmTrackId}`);
       const metadata = metadataRes.data?.obj ?? metadataRes.data ?? null;
       const cmStats = metadata?.cm_statistics ?? null;
 
       // Get Spotify streams stats
-      await throttle(5000); // Additional throttle between calls
+      await throttle(10000); // Additional throttle between calls
       const streamsRes = await this.client.get(
         `/track/${cmTrackId}/spotify/stats/${mode}`,
         { params: { type: 'streams', latest: true } }
@@ -280,7 +286,7 @@ class ChartmetricService {
   async fetchTrackPlaylists(cmTrackId, platform = 'spotify', status = 'current', opts = {}) {
     if (!cmTrackId) return [];
 
-    await throttle(5000);
+    await throttle(10000);
 
     try {
       const res = await this.client.get(
@@ -292,6 +298,57 @@ class ChartmetricService {
       return Array.isArray(data) ? data : [];
     } catch (err) {
       console.warn(`Failed to fetch playlists for track ${cmTrackId}:`, err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch full track metadata including cm_statistics
+   * This includes: TikTok videos, playlist counts, Shazam counts, YouTube views, etc.
+   */
+  async fetchTrackMetadata(cmTrackId) {
+    if (!cmTrackId) return null;
+
+    await throttle(10000);
+
+    try {
+      const res = await this.client.get(`/track/${cmTrackId}`);
+      return res.data?.obj ?? res.data ?? null;
+    } catch (err) {
+      console.warn(`Failed to fetch track metadata for track ${cmTrackId}:`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch historical artist rank
+   * Based on API: /artist/:id/past-artist-rank
+   * 
+   * @param {number} cmArtistId - Chartmetric artist ID
+   * @param {string} date - Date in ISO format (YYYY-MM-DD), defaults to today
+   * @param {string} metric - Metric type (default: 'cm_artist_rank')
+   * @returns {Promise<Array>} Array of rank objects
+   */
+  async fetchHistoricalArtistRank(cmArtistId, date = null, metric = 'cm_artist_rank') {
+    if (!cmArtistId) return [];
+
+    await throttle(10000);
+
+    try {
+      const params = { metric };
+      if (date) {
+        params.date = date;
+      }
+
+      const res = await this.client.get(
+        `/artist/${cmArtistId}/past-artist-rank`,
+        { params }
+      );
+
+      const obj = res.data?.obj ?? res.data;
+      return Array.isArray(obj) ? obj : [];
+    } catch (err) {
+      console.warn(`Failed to fetch historical artist rank for artist ${cmArtistId}:`, err.message);
       return [];
     }
   }

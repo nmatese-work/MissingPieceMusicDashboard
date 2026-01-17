@@ -43,12 +43,23 @@ module.exports = {
   
       listenerHistory: 'number[]',
   
+      // Additional track metrics
+      tiktokVideos: 'number|null',
+      spotifyPlaylists: 'number|null',
+      spotifyEditorialPlaylists: 'number|null',
+      appleMusicPlaylists: 'number|null',
+      appleMusicEditorialPlaylists: 'number|null',
+      spotifyPlaylistReach: 'number|null',
+      shazamCounts: 'number|null',
+      youtubeViews: 'number|null',
+  
       playlistsAdded: [
         {
           playlistName: 'string',
-          platform: 'spotify',
+          platform: 'spotify|applemusic',
           followers: 'number|null',
           addedAt: 'YYYY-MM-DD',
+          curator: 'string|null',
         }
       ]
     }

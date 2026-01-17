@@ -33,6 +33,12 @@ module.exports = (sequelize, DataTypes) => {
           type: DataTypes.STRING,
           allowNull: true,
         },
+
+        platform: {
+          type: DataTypes.STRING,
+          allowNull: true,
+          defaultValue: 'spotify',
+        },
   
         meta: {
           type: DataTypes.JSONB,

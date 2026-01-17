@@ -68,6 +68,22 @@ async function ingestTracksForArtist(arg1, arg2 = {}) {
       stats = null;
     }
 
+    // Get track metadata to extract cm_statistics with all metrics
+    let trackMetadata = null;
+    try {
+      // Fetch full track metadata for cm_statistics (includes TikTok videos, playlist counts, etc.)
+      trackMetadata = await chartmetric.fetchTrackMetadata(chartmetricTrackId);
+      if (!trackMetadata) {
+        // Fallback to track data from artist tracks endpoint
+        trackMetadata = t;
+      }
+    } catch (err) {
+      // Fallback to track data from artist tracks endpoint
+      trackMetadata = t;
+    }
+
+    const cmstats = trackMetadata?.cm_statistics ?? t.cm_statistics ?? t.cm_stats ?? t.cm_track_stats ?? null;
+
     // If stats missing, fallback to track.cm_statistics or t.cm_statistics
     let currentListeners = null;
     let currentSaves = null;
@@ -77,16 +93,27 @@ async function ingestTracksForArtist(arg1, arg2 = {}) {
       currentListeners = stats.currentListeners ?? null;
       currentSaves = stats.currentSaves ?? null;
       saveRate = stats.saveRate ?? null;
-    } else {
-      const cmstats = t.cm_statistics ?? t.cm_stats ?? t.cm_track_stats ?? null;
-      if (cmstats) {
-        // Chartmetric often exposes stream counts under sp_streams
-        currentListeners = cmstats.sp_streams ?? cmstats.sp_playlist_total_reach ?? null;
-        // saves may not be present; try other fields
-        currentSaves = cmstats.sp_saves ?? cmstats.saves ?? null;
-        // no save rate available reliably here
-      }
+    } else if (cmstats) {
+      // Chartmetric often exposes stream counts under sp_streams
+      currentListeners = cmstats.sp_streams ?? cmstats.sp_playlist_total_reach ?? null;
+      // saves may not be present; try other fields
+      currentSaves = cmstats.sp_saves ?? cmstats.saves ?? null;
+      // no save rate available reliably here
     }
+
+    // Extract additional metrics from cm_statistics
+    const tiktokVideos = cmstats?.num_tt_videos ?? cmstats?.tiktok_counts ?? null;
+    const spotifyPlaylists = cmstats?.num_sp_playlists ?? null;
+    const spotifyEditorialPlaylists = cmstats?.num_sp_editorial_playlists ?? null;
+    const appleMusicPlaylists = cmstats?.num_am_playlists ?? null;
+    const appleMusicEditorialPlaylists = cmstats?.num_am_editorial_playlists ?? null;
+    const spotifyPlaylistReach = cmstats?.sp_playlist_total_reach 
+      ? parseInt(String(cmstats.sp_playlist_total_reach), 10) 
+      : null;
+    const shazamCounts = cmstats?.shazam_counts ?? null;
+    const youtubeViews = cmstats?.youtube_views 
+      ? parseInt(String(cmstats.youtube_views), 10) 
+      : null;
 
     // Upsert track weekly snapshot to guarantee it exists (idempotent)
     try {
@@ -96,27 +123,65 @@ async function ingestTracksForArtist(arg1, arg2 = {}) {
         spotifyListeners: currentListeners,
         spotifySaves: currentSaves,
         spotifySaveRate: saveRate,
+        youtubeViews: youtubeViews,
+        tiktokVideos: tiktokVideos,
+        spotifyPlaylists: spotifyPlaylists,
+        spotifyEditorialPlaylists: spotifyEditorialPlaylists,
+        appleMusicPlaylists: appleMusicPlaylists,
+        appleMusicEditorialPlaylists: appleMusicEditorialPlaylists,
+        spotifyPlaylistReach: spotifyPlaylistReach,
+        shazamCounts: shazamCounts,
       });
     } catch (err) {
       console.warn('Failed to upsert TrackWeeklySnapshot for track', track.id, err?.message ?? err);
     }
 
-    // Playlist placements
+    // Playlist placements - fetch both Spotify and Apple Music
     try {
-      // Fetch current playlists (most relevant)
-      const playlists = await chartmetric.fetchTrackPlaylists(
+      const allPlaylists = [];
+      
+      // Fetch Spotify playlists (current)
+      const spotifyPlaylists = await chartmetric.fetchTrackPlaylists(
         String(chartmetricTrackId), 
         'spotify', 
         'current',
-        { editorial: true, limit: 100 } // Get editorial playlists, limit to avoid too much data
+        { editorial: true, limit: 100 }
       );
-      for (const entry of playlists) {
+      allPlaylists.push(...spotifyPlaylists.map(p => ({ ...p, platform: 'spotify' })));
+      
+      // Fetch recent past Spotify playlists to catch recent additions (last 90 days)
+      const sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const spotifyPastPlaylists = await chartmetric.fetchTrackPlaylists(
+        String(chartmetricTrackId),
+        'spotify',
+        'past',
+        { since: sinceDate, editorial: true, limit: 50 }
+      );
+      allPlaylists.push(...spotifyPastPlaylists.map(p => ({ ...p, platform: 'spotify' })));
+      
+      // Fetch Apple Music playlists
+      try {
+        const appleMusicPlaylists = await chartmetric.fetchTrackPlaylists(
+          String(chartmetricTrackId),
+          'applemusic',
+          'current',
+          { editorial: true, limit: 100 }
+        );
+        allPlaylists.push(...appleMusicPlaylists.map(p => ({ ...p, platform: 'applemusic' })));
+      } catch (err) {
+        // Apple Music might not be available for all tracks
+        console.warn(`Apple Music playlists not available for track ${chartmetricTrackId}`);
+      }
+      for (const entry of allPlaylists) {
         // API response structure: { playlist: {...}, track: {...} }
         const playlist = entry.playlist || entry;
         const playlistName = playlist.name || playlist.playlist_name || 'Unknown';
         const addedAt = playlist.added_at || playlist.addedAt || null;
         const followers = playlist.followers || null;
         const curator = playlist.owner_name || playlist.curator_name || playlist.curator || null;
+        
+        // Platform is already set in the entry from above
+        const platform = entry.platform || 'spotify';
 
         await db.TrackPlaylist.findOrCreate({
           where: {
@@ -130,6 +195,7 @@ async function ingestTracksForArtist(arg1, arg2 = {}) {
             followers: followers,
             addedAt: addedAt ? new Date(addedAt) : null,
             curator: curator,
+            platform: platform,
             meta: entry, // Store full entry for reference
           },
         });

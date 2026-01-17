@@ -1,46 +1,534 @@
-🎵 MissingPieceMusicDashboard
+# 🎵 MissingPieceMusicDashboard
 
-A Node.js + PostgreSQL data pipeline for ingesting artist & track metrics (Chartmetric), storing weekly snapshots, and exporting agency-style Weekly Artist Tracking CSV reports that match a predefined spreadsheet format.
+A Node.js + PostgreSQL data pipeline for ingesting artist & track metrics from Chartmetric, storing weekly snapshots, and exporting agency-style Weekly Artist Tracking CSV reports.
 
-1. What This Project Does (High Level)
+## 📋 Table of Contents
 
-This system solves one problem:
+1. [What This Project Does](#what-this-project-does)
+2. [Prerequisites](#prerequisites)
+3. [Installation & Setup](#installation--setup)
+4. [Getting Chartmetric API Access](#getting-chartmetric-api-access)
+5. [Environment Configuration](#environment-configuration)
+6. [Database Setup](#database-setup)
+7. [Running the System](#running-the-system)
+8. [Understanding the Output](#understanding-the-output)
+9. [Troubleshooting](#troubleshooting)
 
-Automatically generate weekly artist tracking spreadsheets that match your agency’s exact reporting format.
+---
 
-It does this by:
+## What This Project Does
 
-Ingesting artist + track data
+This system automatically generates weekly artist tracking spreadsheets that match your agency's exact reporting format. It:
 
-Spotify followers & monthly listeners
+- **Ingests** artist + track data from Chartmetric API
+  - Spotify followers & monthly listeners
+  - Social media metrics (Instagram, TikTok, Twitter, Facebook, YouTube)
+  - Apple Music followers & listeners
+  - Track-level metrics (listeners, saves, playlist placements, TikTok videos, Shazam counts, etc.)
+- **Stores** weekly snapshots in PostgreSQL
+- **Computes** growth metrics (7-day, 28-day, percent change)
+- **Exports** CSV files column-for-column compatible with your goal spreadsheet
 
-Instagram, TikTok, YouTube followers
+---
 
-Track-level listener & save metrics
+## Prerequisites
 
-Storing weekly snapshots in Postgres
+### Software Requirements
 
-Computing deltas
+- **Node.js** v18+ (v20+ recommended)
+  - Download from [nodejs.org](https://nodejs.org/)
+  - Verify installation: `node --version`
+- **PostgreSQL** v13+
+  - Download from [postgresql.org](https://www.postgresql.org/download/)
+  - Verify installation: `psql --version`
+- **npm** (comes with Node.js)
+  - Verify installation: `npm --version`
+- **Git** (for cloning the repository)
+  - Download from [git-scm.com](https://git-scm.com/)
 
-7-day growth
+### API Requirements
 
-28-day growth
+- **Chartmetric Account** with API access
+  - Sign up at [chartmetric.io](https://chartmetric.io/)
+  - You'll need either:
+    - `CHARTMETRIC_ACCESS_TOKEN` (short-lived, expires)
+    - `CHARTMETRIC_REFRESH_TOKEN` (long-lived, used to get access tokens)
 
-Percent change
+---
 
-Exporting CSVs
+## Installation & Setup
 
-Column-for-column compatible with your goal spreadsheet
+### Step 1: Clone the Repository 
+Terminal commands:
+```bash
+git clone <your-repo-url>
+cd MissingPieceMusicDashboard
+```
 
-One CSV per artist
+<your-repo-url> can be copied in github. Click on the green "Code" button, and copy the URL.
+Then write "git clone <url>" in the terminal.
 
-Scaling to batches
+### Step 2: Install Dependencies
+Terminal commands:
+```bash
+npm install
+```
 
-Run 1–20 artists at once
+This will install all required packages:
+- `axios` - HTTP client for API calls
+- `sequelize` - PostgreSQL ORM
+- `pg` - PostgreSQL driver
+- `dotenv` - Environment variable management
+- `dayjs` - Date manipulation
+- And other dependencies
 
-Safe to run weekly
+## Getting Chartmetric API Access
 
-2. Architecture Overview
+### Step 1: Create a Chartmetric Account
+
+1. Go to [chartmetric.io](https://chartmetric.io/)
+2. Sign up for an account
+3. Navigate to your account settings or API section
+
+### Step 2: Get Your Refresh Token
+
+Chartmetric provides a **refresh token** that you can use to generate access tokens. The refresh token is long-lived and doesn't expire (unless revoked).
+
+1. Log into your Chartmetric account
+2. Navigate to **API Settings** or **Developer Settings**
+3. Find your **Refresh Token** (it will look like a long string of characters)
+4. Copy this token - you'll need it for the next step
+
+### Step 3: Exchange Refresh Token for Access Token
+
+The system uses an **access token** for API calls, which expires periodically. You'll use your refresh token to get a new access token.
+
+1. Create a `.env` file in the project root (see next section for full `.env` setup)
+2. Add your refresh token:
+   ```bash
+   CHARTMETRIC_REFRESH_TOKEN=your_refresh_token_here
+   ```
+3. Run the token exchange script:
+   ```bash
+   node scripts/exchange_chartmetric_token.js
+   ```
+4. The script will output a response that includes an `access_token` field
+5. Copy the access token from the output
+6. Add it to your `.env` file:
+   ```bash
+   CHARTMETRIC_ACCESS_TOKEN=your_access_token_here
+   ```
+
+If these steps dont work, run the following command in the terminal, which output of which contains the temporary access token:
+   ```bash
+   curl -d '{"refreshtoken":"edMOPgIHAIY5vPsPKq5cFeCDwrH4m3v3tngaBSmxJhDHLmG6Ki2HUzwTVL9XqZvy"}' -H "Content-Type: application/json" -X POST https://api.chartmetric.com/api/token
+   ```
+
+### Step 4: Test Your API Connection
+
+Verify that your access token works:
+
+```bash
+node scripts/testChartmetricAuth.js
+```
+
+You should see output like:
+```
+Chartmetric auth + search OK
+Selected artist:
+{
+  id: 296956,
+  name: 'Brian Dunne',
+  verified: true,
+  spotifyFollowers: 13891,
+  ...
+}
+```
+
+If you see an error like `jwt expired`, your access token has expired. Repeat Step 3 to get a new one.
+
+---
+
+## Environment Configuration
+
+### Step 1: Create `.env` File
+
+Create a `.env` file in the project root directory:
+
+Terminal Commands:
+```bash
+touch .env
+```
+
+### Step 2: Configure Environment Variables
+
+Open `.env` in a text editor and add the following:
+
+```bash
+# Database Configuration.
+DATABASE_URL=postgres://username:password@localhost:5432/music_dashboard
+#What this line means:
+#postgres://   → database type
+#username      → database username, replace with user logged in on computer
+#mypassword    → database password
+#localhost     → database is on your computer
+#5432          → default PostgreSQL port
+#music_dashboard → database name
+
+# Chartmetric API (Required for data ingestion)
+CHARTMETRIC_ACCESS_TOKEN=your_access_token_here
+CHARTMETRIC_REFRESH_TOKEN=your_refresh_token_here
+
+# Output Directory (Optional - defaults to outputExports/) This is the name of the folder you want the CSVs exported to. 
+OUTPUT_DIR=outputExports
+
+# Offline Mode (Optional - set to 'true' to skip API calls, was used for testing)
+# OFFLINE=true
+```
+
+### Environment Variable Details
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | **Yes** | PostgreSQL connection string. Format: `postgres://user:password@host:port/database` |
+| `CHARTMETRIC_ACCESS_TOKEN` | Yes* | Chartmetric API access token (expires periodically) |
+| `CHARTMETRIC_REFRESH_TOKEN` | Yes* | Chartmetric refresh token (long-lived, used to get access tokens) |
+| `OUTPUT_DIR` | No | Directory where CSV files will be exported (default: `outputExports/`) |
+| `OFFLINE` | No | Set to `true` to skip all Chartmetric API calls and use only existing DB data |
+
+\* Required for data ingestion. The system can work in `OFFLINE=true` mode using only existing database data.
+
+### Example `.env` File
+
+```bash
+# Local PostgreSQL database
+DATABASE_URL=postgres://postgres:mypassword@localhost:5432/music_dashboard
+
+# Chartmetric tokens
+CHARTMETRIC_ACCESS_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+CHARTMETRIC_REFRESH_TOKEN=your_refresh_token_here
+
+# Optional
+OUTPUT_DIR=outputExports
+```
+
+---
+
+## Database Setup
+
+### Step 1: Start PostgreSQL
+
+Make sure PostgreSQL is running on your system:
+
+**macOS (using Homebrew):**
+```bash
+brew services start postgresql
+```
+
+**Linux:**
+```bash
+sudo systemctl start postgresql
+```
+
+**Windows:**
+- Start PostgreSQL from Services or use pgAdmin
+
+### Step 2: Create the Database
+
+```bash
+createdb music_dashboard
+```
+
+Or using `psql`:
+```bash
+psql -U postgres
+CREATE DATABASE music_dashboard;
+\q
+```
+
+### Step 3: Verify Database Connection
+
+Update your `.env` file with the correct database credentials, then test the connection:
+
+```bash
+node scripts/testDb.js
+```
+
+You should see a success message if the connection works.
+
+### Step 4: Initialize Database Tables
+
+The system uses Sequelize ORM and will **automatically create all tables** on first run. No manual schema setup required!
+
+Tables that will be created:
+- `Artists` - Artist information
+- `WeeklyArtistSnapshots` - Weekly metrics per artist
+- `Tracks` - Track information
+- `TrackWeeklySnapshots` - Weekly metrics per track
+- `TrackPlaylists` - Playlist placements for tracks
+
+---
+
+## Running the System
+
+### Single Artist Mode
+
+#### Basic Usage
+
+```bash
+node scripts/runIngestAndExport.js "Artist Name" --weeks=8 --tracks
+```
+
+**Parameters:**
+- `"Artist Name"` - The name of the artist (in quotes if it contains spaces)
+- `--weeks=8` - Number of weeks of historical data to include (default: 8)
+- `--tracks` - Include track-level data in the report
+
+#### Interactive Artist Selection
+
+If multiple artists match the search, you can enable interactive selection:
+
+```bash
+node scripts/runIngestAndExport.js "Artist Name" --weeks=8 --tracks --interactive
+```
+
+When enabled, you'll see a list of matching artists and can choose the correct one:
+```
+Multiple artists found for "Artist Name":
+1. Artist Name (ID: 123456) (Spotify Followers: 10,000, Verified: Yes)
+2. Artist Name (ID: 789012) (Spotify Followers: 5,000, Verified: No)
+Enter the number of the artist to select (or press Enter for first):
+```
+
+#### What It Does
+
+1. **Searches** Chartmetric for the artist
+2. **Ingests** current metrics (Spotify, social media, Apple Music)
+3. **Fetches** track data and metrics (listeners, saves, playlist placements, TikTok videos, etc.)
+4. **Stores** weekly snapshots in the database
+5. **Generates** a CSV file: `outputExports/<Artist Name> - Weekly Artist Tracking.csv`
+
+#### Example
+
+```bash
+node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks --interactive
+```
+
+### Batch Mode (Multiple Artists)
+
+#### Step 1: Configure Artists List
+
+Edit the `artists.txt` file in the project root. Add one artist name per line:
+
+```
+Brian Dunne
+David Wilcox
+Ethan Daniel Davidson
+Fantastic Cat
+Jack Schneider
+```
+
+#### Step 2: Run Batch Processing
+
+**Without interactive selection (auto-selects first match):**
+```bash
+node scripts/runBatchIngestAndExport.js
+```
+
+**With interactive selection (prompts for each artist):**
+```bash
+node scripts/runBatchIngestAndExport.js --interactive
+```
+
+#### What It Does
+
+1. Reads artist names from `artists.txt`
+2. For each artist:
+   - Ingests data from Chartmetric
+   - Stores snapshots in database
+   - Generates individual CSV file
+3. Creates a combined CSV: `outputExports/Weekly Artist Tracking - All Artists.csv`
+
+#### Batch Processing Notes
+
+- There's a 3-second delay between artists to avoid rate limiting (can change minMS delay value in chartmetricThrottle.js to alter this time)
+- Due to delay & number of artists, this batch run takes a somewhat long time, up to 30 minutes.
+- If an artist fails, the batch continues with the next artist
+- Each artist gets its own CSV file in `outputExports/`
+
+### Offline Mode
+
+If your Chartmetric token is expired or you want to generate reports from existing data:
+
+```bash
+OFFLINE=true node scripts/runIngestAndExport.js "Artist Name" --weeks=8 --tracks
+```
+
+This will:
+- Skip all Chartmetric API calls
+- Use only data already in the database
+- Still generate complete CSV reports
+
+---
+
+## Understanding the Output
+
+### CSV File Structure
+
+Each CSV file contains:
+
+#### Header Section
+- Artist name
+- Blank row
+- Column headers with dates
+
+#### Metrics Sections
+
+1. **Spotify Section**
+   - Spotify followers
+   - Spotify monthly listeners
+
+2. **Apple Music Section**
+   - Apple Music followers
+   - Apple Music listeners
+
+3. **Tracks Section** (if `--tracks` flag used)
+   - One row per track
+   - Columns include:
+     - Current listeners
+     - Saves
+     - Save rate
+     - TikTok videos count
+     - Spotify playlists count
+     - Spotify editorial playlists
+     - Apple Music playlists count
+     - Apple Music editorial playlists
+     - Playlist reach
+     - Shazam counts
+     - YouTube views
+     - Recent playlist additions (with dates)
+     - Historical weekly data (with dates)
+
+4. **Socials Section**
+   - Twitter followers
+   - Facebook followers
+   - Instagram followers
+   - TikTok followers
+   - TikTok likes
+   - YouTube subscribers
+
+#### Column Structure
+
+Each metric row includes:
+- **Label** - Metric name
+- **#** - Current value
+- **7-day growth** - Absolute change
+- **7-day change** - Percentage change
+- **28-day growth** - Absolute change
+- **28-day change** - Percentage change
+- **Additional track columns** (for tracks only)
+- **Historical weekly columns** - One column per week with dates (M/D/YYYY format)
+
+### Output Location
+
+All CSV files are saved to:
+```
+outputExports/
+├── <Artist Name> - Weekly Artist Tracking.csv
+├── Weekly Artist Tracking - All Artists.csv
+└── ...
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### ❌ "jwt expired" Error
+
+**Problem:** Your Chartmetric access token has expired.
+
+**Solution:**
+1. Make sure `CHARTMETRIC_REFRESH_TOKEN` is set in `.env`
+2. Run: `node scripts/exchange_chartmetric_token.js`
+3. Copy the new access token from the output
+4. Update `CHARTMETRIC_ACCESS_TOKEN` in `.env`
+
+#### ❌ "Refresh token does not exist"
+
+**Problem:** Your refresh token is invalid or revoked.
+
+**Solution:**
+1. Log into Chartmetric and verify your refresh token
+2. Generate a new refresh token if needed
+3. Update `CHARTMETRIC_REFRESH_TOKEN` in `.env`
+
+#### ❌ "Connection refused" (Database)
+
+**Problem:** PostgreSQL is not running or connection string is incorrect.
+
+**Solution:**
+1. Verify PostgreSQL is running: `psql --version`
+2. Check your `DATABASE_URL` in `.env`
+3. Test connection: `node scripts/testDb.js`
+4. Ensure database exists: `createdb music_dashboard`
+
+#### ❌ "Chartmetric search failed"
+
+**Problem:** API call failed (network issue, rate limit, or invalid token).
+
+**Solution:**
+1. Check your internet connection
+2. Verify access token: `node scripts/testChartmetricAuth.js`
+3. Wait a few minutes if rate limited (system uses 5-second throttling)
+4. Try again or use `OFFLINE=true` mode
+
+#### ❌ "SequelizeValidationError: notNull Violation"
+
+**Problem:** Required field is missing (usually `chartmetricArtistId`).
+
+**Solution:**
+1. Artist not found in Chartmetric - try a different search term
+2. Use `--interactive` flag to manually select artist
+3. Check if artist exists in Chartmetric database
+
+#### ❌ Tracks Not Showing in CSV
+
+**Problem:** Track data exists but values are NULL.
+
+**Solution:**
+1. This is normal if Chartmetric doesn't have track-level data
+2. Verify tracks were ingested: Check database `Tracks` table
+3. Re-run ingestion: `node scripts/runIngestAndExport.js "Artist Name" --tracks`
+
+#### ❌ Rate Limiting (429 Errors)
+
+**Problem:** Too many API calls too quickly.
+
+**Solution:**
+- The system already uses 3 or 5-second throttling between calls
+- If you still hit rate limits:
+  - Increase delay in `scripts/runBatchIngestAndExport.js` (change `DELAY_MS`)
+  - Process fewer artists at once
+  - Wait longer between batch runs
+
+### Getting Help
+
+1. **Check logs** - The system outputs detailed error messages
+2. **Test components individually:**
+   - Database: `node scripts/testDb.js`
+   - Chartmetric auth: `node scripts/testChartmetricAuth.js`
+3. **Use offline mode** to isolate API issues:
+   ```bash
+   OFFLINE=true node scripts/runIngestAndExport.js "Artist Name" --tracks
+   ```
+
+---
+
+## Architecture Overview
+
+```
 Chartmetric API
       |
       v
@@ -59,6 +547,7 @@ Chartmetric API
 │ WeeklyArtistSnapshots    │
 │ Track                    │
 │ TrackWeeklySnapshots     │
+│ TrackPlaylists           │
 └───────────┬──────────────┘
             v
 ┌──────────────────────────┐
@@ -75,235 +564,84 @@ Chartmetric API
 └───────────┬──────────────┘
             v
    outputExports/*.csv
-
-3. Requirements
-Software
-
-Node.js v18+ (v20+ recommended)
-
-PostgreSQL v13+
-
-npm
-
-APIs
-
-Chartmetric account
-
-CHARTMETRIC_API_TOKEN or
-
-CHARTMETRIC_REFRESH_TOKEN
-
-⚠️ The system still works offline if Chartmetric is unavailable.
-
-4. Installation
-git clone <repo-url>
-cd MissingPieceMusicDashboard
-npm install
-
-5. Environment Variables
-
-Create a .env file in the project root:
-
-DATABASE_URL=postgres://user:password@localhost:5432/music_dashboard
-OUTPUT_DIR=outputExports
-
-# Chartmetric (optional)
-CHARTMETRIC_API_TOKEN=
-CHARTMETRIC_REFRESH_TOKEN=
-
-Optional flags
-OFFLINE=true
-
-
-OFFLINE mode
-
-skips all Chartmetric API calls
-
-uses only existing DB data
-
-lets you continue building reports while tokens are broken
-
-6. Database Setup
-
-Ensure Postgres is running and your database exists:
-
-createdb music_dashboard
-
-
-The app uses Sequelize and will auto-create tables on first run.
-
-7. Core Data Models (Important)
-Artist
-
-One row per artist
-
-Links everything else
-
-WeeklyArtistSnapshot
-
-One row per artist per week
-
-Metrics:
-
-spotifyFollowers
-
-spotifyMonthlyListeners
-
-instagramFollowers
-
-tiktokFollowers
-
-youtubeSubscribers
-
-Track
-
-One row per track per artist
-
-TrackWeeklySnapshot
-
-One row per track per week
-
-Metrics:
-
-spotifyListeners
-
-spotifySaves
-
-spotifySaveRate
-
-8. Running the System (Single Artist)
-8.1 Offline (Recommended while Chartmetric is broken)
-OFFLINE=true node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks
-
-
-This will:
-
-connect to DB
-
-read existing snapshots
-
-compute growth
-
-export CSV
-
-8.2 Online (Chartmetric working)
-node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks
-
-
-This will:
-
-fetch artist metrics
-
-backfill up to 12 weeks
-
-ingest tracks
-
-export CSV
-
-9. Batch Mode (Multiple Artists)
-9.1 Configure artists
-
-Edit config/artists.json:
-
-[
-  { "name": "Brian Dunne", "chartmetricArtistId": 296956 },
-  { "name": "David Wilcox" },
-  { "name": "Ethan Daniel Davidson" }
-]
-
-9.2 Run batch
-OFFLINE=true node scripts/runBatchIngestAndExport.js
-
-
-Each artist gets:
-
-outputExports/<Artist Name> - Weekly Artist Tracking.csv
-
-10. Track Listener Data (Important Limitation)
-Current status
-
-Tracks exist
-
-Track weekly snapshots exist
-
-Listener values are NULL because:
-
-Chartmetric /track/:id/stat/spotify requires a valid token
-
-When Chartmetric is fixed
-
-Run:
-
-node scripts/ingestTrackWeeklyStats.js --artist="Brian Dunne" --weeks=12
-
-
-Then re-export:
-
-node scripts/runIngestAndExport.js "Brian Dunne" --weeks=12 --tracks
-
-11. How CSV Output Maps to the Goal Spreadsheet
-Spreadsheet Section	Source
-Spotify followers	WeeklyArtistSnapshot.spotifyFollowers
-Spotify monthly listeners	WeeklyArtistSnapshot.spotifyMonthlyListeners
-7-day growth	current − previous week
-28-day growth	current − 4 weeks ago
-% change	computed
-Track rows	Track + TrackWeeklySnapshot
-Listener history columns	listenerHistory array
-Social followers	Instagram/TikTok/YouTube snapshots
-
-The renderer intentionally mirrors the spreadsheet layout.
-
-12. File-by-File Breakdown (Critical)
-scripts/
-File	Purpose
-runIngestAndExport.js	Main entrypoint
-runBatchIngestAndExport.js	Batch runner
-ingestTrackWeeklyStats.js	Track-level history fetch
-src/services/ingestion/
-File	Purpose
-ingestChartmetric.js	Artist metrics
-ingestTracks.js	Track list ingestion
-ingestTrackWeeklyStats.js	Track listener history
-src/reports/
-File	Purpose
-buildWeeklyArtistReport.js	Computes report object
-src/renderers/
-File	Purpose
-weeklyArtistCsv.renderer.js	Spreadsheet layout
-src/services/export/
-File	Purpose
-exportCsv.js	Writes CSV
-13. Common Errors & Fixes
-❌ Refresh token does not exist
-
-Token revoked or malformed
-
-Contact Chartmetric support
-
-Use OFFLINE=true meanwhile
-
-❌ Duplicate weekly snapshot
-
-Snapshot already exists
-
-Safe — upsert logic handles it
-
-❌ Tracks not showing in CSV
-
-TrackWeeklySnapshots exist but listener values are NULL
-
-Expected until track stats endpoint works
-
-14. Recommended Weekly Workflow
-
-Ensure Chartmetric token is valid
-
-Run batch:
-
-node scripts/runBatchIngestAndExport.js
-
-
-Review CSVs
-
-Deliver to team
+```
+
+---
+
+## Data Models
+
+### Artist
+- One row per artist
+- Links to all other data
+
+### WeeklyArtistSnapshot
+- One row per artist per week
+- Stores: Spotify metrics, social media followers, Apple Music metrics
+
+### Track
+- One row per track per artist
+- Links to artist and track snapshots
+
+### TrackWeeklySnapshot
+- One row per track per week
+- Stores: listeners, saves, TikTok videos, playlist counts, Shazam counts, YouTube views, etc.
+
+### TrackPlaylist
+- One row per playlist placement
+- Stores: playlist name, platform, followers, date added, curator
+
+---
+
+## Recommended Weekly Workflow
+
+1. **Refresh access token** (if expired):
+   ```bash
+   node scripts/exchange_chartmetric_token.js
+   ```
+
+2. **Update `.env`** with new access token
+
+3. **Run batch processing**:
+   ```bash
+   node scripts/runBatchIngestAndExport.js --interactive
+   ```
+
+4. **Review CSVs** in `outputExports/`
+
+5. **Deliver to team**
+
+---
+
+## File Structure
+
+```
+MissingPieceMusicDashboard-1/
+├── scripts/
+│   ├── runIngestAndExport.js      # Main entrypoint (single artist)
+│   ├── runBatchIngestAndExport.js  # Batch runner
+│   ├── exchange_chartmetric_token.js # Token exchange utility
+│   ├── testChartmetricAuth.js     # Test API connection
+│   └── testDb.js                   # Test database connection
+├── src/
+│   ├── config/                     # Configuration files
+│   ├── models/                     # Database models
+│   ├── services/
+│   │   ├── chartmetric/           # Chartmetric API client
+│   │   ├── ingestion/             # Data ingestion services
+│   │   └── export/                # CSV export services
+│   ├── reports/                    # Report building logic
+│   └── contracts/                  # Data contracts/schemas
+├── outputExports/                  # Generated CSV files
+├── artists.txt                     # Artist list for batch mode
+├── .env                            # Environment variables (create this)
+└── README                          # This file
+```
+
+
+## Support
+
+For issues or questions:
+1. Check the Troubleshooting section above
+2. Review error messages in the console output
+3. Test individual components using the test scripts
+4. Check Chartmetric API status if API calls are failing

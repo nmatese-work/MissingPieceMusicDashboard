@@ -16,6 +16,9 @@ module.exports = (sequelize, DataTypes) => {
     spotifyMonthlyListeners: DataTypes.INTEGER,
     spotifyFollowers: DataTypes.INTEGER,
 
+    appleMusicFollowers: DataTypes.INTEGER,
+    appleMusicListeners: DataTypes.INTEGER,
+
     tiktokFollowers: DataTypes.INTEGER,
     tiktokLikes: DataTypes.INTEGER,
     instagramFollowers: DataTypes.INTEGER,

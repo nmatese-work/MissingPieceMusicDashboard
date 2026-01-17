@@ -13,14 +13,19 @@ function row(cells) {
 
 function renderWeeklyArtistCsv(report) {
   const rows = [];
-  const { artistName, weeks, rows: reportRows } = report;
+  const { artistName, weeks, weekDates, rows: reportRows } = report;
+  
+  // Use full dates if available, otherwise fall back to short week labels
+  const dateColumns = weekDates && weekDates.length > 0 
+    ? weekDates.slice(1) 
+    : weeks.slice(1);
 
   // Artist title
   rows.push(row([artistName]));
   rows.push(row([]));
 
   // Header row (UNLIMITED HISTORY)
-  // Note: For tracks, additional columns (Listeners, Saves, Save %) are added after growth columns
+  // Note: For tracks, additional columns are added after growth columns
   rows.push(
     row([
       '',
@@ -34,7 +39,16 @@ function renderWeeklyArtistCsv(report) {
       'Listeners', // Track-specific: current listeners
       'Saves', // Track-specific: current saves
       'Save %', // Track-specific: save rate
-      ...weeks.slice(1).map(w => w || ''), // ✅ ALL historical weeks
+      'TikTok Videos', // Track-specific: number of TikTok videos
+      'Spotify Playlists', // Track-specific: total Spotify playlists
+      'Spotify Editorial', // Track-specific: Spotify editorial playlists
+      'Apple Music Playlists', // Track-specific: Apple Music playlists
+      'Apple Music Editorial', // Track-specific: Apple Music editorial playlists
+      'Playlist Reach', // Track-specific: Spotify playlist total reach
+      'Shazam Counts', // Track-specific: Shazam counts
+      'YouTube Views', // Track-specific: YouTube views
+      'Recent Playlist Adds', // Track-specific: recent playlist additions with dates
+      ...dateColumns.map(d => d || ''), // ✅ ALL historical weeks with dates
     ])
   );
 
@@ -48,9 +62,27 @@ function renderWeeklyArtistCsv(report) {
       continue;
     }
 
-    // For tracks, include Listeners, Saves, Save % columns
+    // For tracks, include additional metric columns
     // For other metrics, these columns are empty
     const isTrack = r.currentListeners !== undefined || r.currentSaves !== undefined;
+    
+    // Format recent playlist additions with dates (last 5, most recent first)
+    let recentPlaylists = '';
+    if (isTrack && r.playlistsAdded && Array.isArray(r.playlistsAdded) && r.playlistsAdded.length > 0) {
+      const sorted = [...r.playlistsAdded]
+        .filter(p => p.addedAt) // Only include playlists with dates
+        .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt))
+        .slice(0, 5); // Last 5 additions
+      
+      recentPlaylists = sorted
+        .map(p => {
+          const date = p.addedAt ? new Date(p.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+          const name = p.playlistName || 'Unknown';
+          const followers = p.followers ? `(${p.followers.toLocaleString()})` : '';
+          return `${name} ${followers} ${date}`.trim();
+        })
+        .join('; ');
+    }
     
     rows.push(
       row([
@@ -65,6 +97,15 @@ function renderWeeklyArtistCsv(report) {
         isTrack ? (r.currentListeners ?? '') : '', // Listeners (tracks only)
         isTrack ? (r.currentSaves ?? '') : '', // Saves (tracks only)
         isTrack ? (r.saveRate ? `${(r.saveRate * 100).toFixed(2)}%` : '') : '', // Save % (tracks only)
+        isTrack ? (r.tiktokVideos ?? '') : '', // TikTok Videos (tracks only)
+        isTrack ? (r.spotifyPlaylists ?? '') : '', // Spotify Playlists (tracks only)
+        isTrack ? (r.spotifyEditorialPlaylists ?? '') : '', // Spotify Editorial (tracks only)
+        isTrack ? (r.appleMusicPlaylists ?? '') : '', // Apple Music Playlists (tracks only)
+        isTrack ? (r.appleMusicEditorialPlaylists ?? '') : '', // Apple Music Editorial (tracks only)
+        isTrack ? (r.spotifyPlaylistReach ? r.spotifyPlaylistReach.toLocaleString() : '') : '', // Playlist Reach (tracks only)
+        isTrack ? (r.shazamCounts ?? '') : '', // Shazam Counts (tracks only)
+        isTrack ? (r.youtubeViews ?? '') : '', // YouTube Views (tracks only)
+        isTrack ? recentPlaylists : '', // Recent Playlist Adds with dates (tracks only)
         ...(r.history || []), // ✅ FULL HISTORY
       ])
     );
