@@ -23,10 +23,10 @@ This system automatically generates weekly artist tracking spreadsheets that mat
 - **Ingests** artist + track data from Chartmetric API
   - Spotify followers & monthly listeners
   - Social media metrics (Instagram, TikTok, Twitter, Facebook, YouTube)
-  - Apple Music followers & listeners
-  - Track-level metrics (listeners, saves, playlist placements, TikTok videos, Shazam counts, etc.)
+  - Apple Music followers & listeners (beta - not yet fully functional)
+  - Track-level metrics (listeners, saves, playlist placements, TikTok videos, Shazam counts, etc.) (beta - some values not functional)
 - **Stores** weekly snapshots in PostgreSQL
-- **Computes** growth metrics (7-day, 28-day, percent change)
+- **Computes** growth metrics (7-day, 28-day, percent change) (beta - contingent on historical metrics which are hit or miss)
 - **Exports** CSV files column-for-column compatible with your goal spreadsheet
 
 ---
@@ -48,11 +48,11 @@ This system automatically generates weekly artist tracking spreadsheets that mat
 
 ### API Requirements
 
-- **Chartmetric Account** with API access
+- **Chartmetric Account** with API access (needs subscription, free trial offered)
   - Sign up at [chartmetric.io](https://chartmetric.io/)
-  - You'll need either:
-    - `CHARTMETRIC_ACCESS_TOKEN` (short-lived, expires)
+  - You'll need:
     - `CHARTMETRIC_REFRESH_TOKEN` (long-lived, used to get access tokens)
+        - `CHARTMETRIC_ACCESS_TOKEN` (short-lived, expires)
 
 ---
 
