@@ -1,8 +1,7 @@
 let lastCall = 0;
 
-// Default throttle increased to 10 seconds to avoid rate limiting
-// User requested 5-10 seconds to avoid rate limits at all costs
-async function throttle(minMs = 5000) {
+// Default throttle increased to 3 seconds to avoid rate limiting
+async function throttle(minMs = 3000) {
   const now = Date.now();
   const wait = Math.max(0, minMs - (now - lastCall));
   if (wait) {

@@ -202,9 +202,24 @@ class ChartmetricService {
       }
 
       const arr = obj[key];
-      return Array.isArray(arr) ? arr : [];
+      if (!Array.isArray(arr)) {
+        console.warn(`Expected array for ${platform}.${key}, got:`, typeof arr);
+        return [];
+      }
+      
+      // Log first few data points for debugging
+      if (arr.length > 0) {
+        console.log(`Fetched ${arr.length} data points for ${platform}.${key} (first: ${JSON.stringify(arr[0])})`);
+      } else {
+        console.warn(`No data points returned for ${platform}.${key}`);
+      }
+      
+      return arr;
     } catch (err) {
       console.warn(`Failed to fetch ${platform} stat history for artist ${cmArtistId}:`, err.message);
+      if (err.response?.data) {
+        console.warn('Response data:', JSON.stringify(err.response.data));
+      }
       return [];
     }
   }

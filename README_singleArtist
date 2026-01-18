@@ -69,6 +69,11 @@ Open it in Excel or Google Sheets.
 ```
 node scripts/exchange_chartmetric_token.js
 ```
+OR
+```
+curl -d '{"refreshtoken":"YOUR_REFRESH_TOKEN"}' -H "Content-Type: application/json" -X POST https://api.chartmetric.com/api/token
+``` 
+And copy paste token into .env
 
 Then run the artist again.
 

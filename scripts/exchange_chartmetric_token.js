@@ -1,7 +1,8 @@
 /*
-  Usage: set CHARTMETRIC_REFRESH_TOKEN in env, then:
+  Usage: set CHARTMETRIC_REFRESH_TOKEN in .env file, then:
     node scripts/exchange_chartmetric_token.js
 */
+require('dotenv').config();
 const axios = require('axios');
 
 (async () => {
@@ -13,7 +14,7 @@ const axios = require('axios');
   try {
     const r = await axios.post('https://api.chartmetric.com/api/token', { refreshtoken: refresh }, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 20000,
+      timeout: 50000,
     });
     console.log('RESPONSE:', JSON.stringify(r.data, null, 2));
     // If response contains an access token field, print a short note:

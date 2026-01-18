@@ -151,6 +151,9 @@ async function ingestArtistByName({ name, weeks = 1 }) {
   const until = weekDates[0]; // Most recent week
 
   const { retryWithBackoff, sleep } = require('../../lib/chartmetricThrottle');
+  
+  // Debug: Log what we're fetching
+  console.log(`Fetching historical data from ${since} to ${until}`);
 
   // Fetch historical stats for each platform with retry logic and delays
   // Each call is wrapped in retryWithBackoff to handle 429 errors
@@ -234,29 +237,33 @@ async function ingestArtistByName({ name, weeks = 1 }) {
 
   // Helper function to find value for a specific week
   function findValueForWeek(historyArray, weekDate) {
-    if (!Array.isArray(historyArray) || historyArray.length === 0) return null;
+    if (!Array.isArray(historyArray) || historyArray.length === 0) {
+      return null;
+    }
     
-    // Find the closest date that's <= weekDate (within 7 days)
-    const weekTimestamp = new Date(weekDate).getTime();
-    const weekEndTimestamp = weekTimestamp + (7 * 24 * 60 * 60 * 1000); // Add 7 days
+    // Normalize weekDate to start of week (Monday)
+    const weekStart = dayjs(weekDate).startOf('week');
+    const weekEnd = weekStart.add(7, 'days');
+    
     let closest = null;
     let closestDiff = Infinity;
     
     for (const point of historyArray) {
-      const pointDate = point.date || point.timestp || point.timestamp || point.dateISO || point.start;
-      if (!pointDate) continue;
+      // Try multiple date field formats
+      const pointDateStr = point.date || point.timestp || point.timestamp || point.dateISO || point.start || point.t;
+      if (!pointDateStr) continue;
       
-      let pointTimestamp;
+      let pointDate;
       try {
-        pointTimestamp = new Date(pointDate).getTime();
-        if (isNaN(pointTimestamp)) continue;
+        pointDate = dayjs(pointDateStr);
+        if (!pointDate.isValid()) continue;
       } catch (e) {
         continue;
       }
       
-      // Find points within the week range (weekDate to weekDate + 7 days)
-      if (pointTimestamp >= weekTimestamp && pointTimestamp <= weekEndTimestamp) {
-        const diff = Math.abs(pointTimestamp - weekTimestamp);
+      // Check if point is within the week range
+      if (pointDate.isAfter(weekStart) && pointDate.isBefore(weekEnd)) {
+        const diff = Math.abs(pointDate.diff(weekStart, 'days'));
         if (diff < closestDiff) {
           closestDiff = diff;
           closest = point;
@@ -264,78 +271,100 @@ async function ingestArtistByName({ name, weeks = 1 }) {
       }
     }
     
-    // If no point found in the week, try to find the closest point before the week
+    // If no point found in the week, try to find the closest point before the week end
     if (!closest) {
       for (const point of historyArray) {
-        const pointDate = point.date || point.timestp || point.timestamp || point.dateISO || point.start;
-        if (!pointDate) continue;
+        const pointDateStr = point.date || point.timestp || point.timestamp || point.dateISO || point.start || point.t;
+        if (!pointDateStr) continue;
         
-        let pointTimestamp;
+        let pointDate;
         try {
-          pointTimestamp = new Date(pointDate).getTime();
-          if (isNaN(pointTimestamp)) continue;
+          pointDate = dayjs(pointDateStr);
+          if (!pointDate.isValid()) continue;
         } catch (e) {
           continue;
         }
         
-        const diff = weekTimestamp - pointTimestamp;
-        if (diff >= 0 && diff < closestDiff) {
-          closestDiff = diff;
-          closest = point;
+        // Find closest point before or at week end
+        if (pointDate.isBefore(weekEnd) || pointDate.isSame(weekEnd)) {
+          const diff = Math.abs(weekStart.diff(pointDate, 'days'));
+          if (diff < closestDiff) {
+            closestDiff = diff;
+            closest = point;
+          }
         }
       }
     }
     
-    return closest?.value ?? null;
+    // Extract value - try multiple field names
+    if (!closest) return null;
+    return closest.value ?? closest.value_int ?? closest.value_number ?? closest.v ?? closest.val ?? null;
   }
 
   // 8️⃣ Create snapshots for each week
+  let snapshotsCreated = 0;
   for (const weekStart of weekDates) {
+    const isCurrentWeek = weekStart === weekDates[0];
+    
+    // Find historical values for this week
+    const spotifyFollowersVal = isCurrentWeek 
+      ? (cmArtist.sp_followers ?? null)
+      : findValueForWeek(spotifyHistory, weekStart);
+    
+    const spotifyListenersVal = isCurrentWeek
+      ? (cmArtist.sp_monthly_listeners ?? null)
+      : findValueForWeek(spotifyListenersHistory, weekStart);
+    
+    const instagramFollowersVal = isCurrentWeek
+      ? instagramFollowers
+      : findValueForWeek(instagramHistory, weekStart);
+    
+    const tiktokFollowersVal = isCurrentWeek
+      ? tiktokFollowers
+      : findValueForWeek(tiktokHistory, weekStart);
+    
+    const tiktokLikesVal = isCurrentWeek
+      ? tiktokLikes
+      : findValueForWeek(tiktokLikesHistory, weekStart);
+    
+    const twitterFollowersVal = isCurrentWeek
+      ? twitterFollowers
+      : findValueForWeek(twitterHistory, weekStart);
+    
+    const facebookFollowersVal = isCurrentWeek
+      ? facebookFollowers
+      : findValueForWeek(facebookHistory, weekStart);
+    
+    const youtubeSubscribersVal = isCurrentWeek
+      ? youtubeSubscribers
+      : findValueForWeek(youtubeHistory, weekStart);
+    
     const snapshot = {
       artistId: artist.id,
       weekStartDate: weekStart,
       
-      // Use current values for most recent week, historical for others
-      spotifyFollowers: weekStart === weekDates[0] 
-        ? (cmArtist.sp_followers ?? null)
-        : findValueForWeek(spotifyHistory, weekStart),
-      
-      spotifyMonthlyListeners: weekStart === weekDates[0]
-        ? (cmArtist.sp_monthly_listeners ?? null)
-        : findValueForWeek(spotifyListenersHistory, weekStart),
-      
-      instagramFollowers: weekStart === weekDates[0]
-        ? instagramFollowers
-        : findValueForWeek(instagramHistory, weekStart),
-      
-      tiktokFollowers: weekStart === weekDates[0]
-        ? tiktokFollowers
-        : findValueForWeek(tiktokHistory, weekStart),
-      
-      tiktokLikes: weekStart === weekDates[0]
-        ? tiktokLikes
-        : findValueForWeek(tiktokLikesHistory, weekStart),
-      
-      twitterFollowers: weekStart === weekDates[0]
-        ? twitterFollowers
-        : findValueForWeek(twitterHistory, weekStart),
-      
-      facebookFollowers: weekStart === weekDates[0]
-        ? facebookFollowers
-        : findValueForWeek(facebookHistory, weekStart),
-      
-      youtubeSubscribers: weekStart === weekDates[0]
-        ? youtubeSubscribers
-        : findValueForWeek(youtubeHistory, weekStart),
-      
+      spotifyFollowers: spotifyFollowersVal,
+      spotifyMonthlyListeners: spotifyListenersVal,
+      instagramFollowers: instagramFollowersVal,
+      tiktokFollowers: tiktokFollowersVal,
+      tiktokLikes: tiktokLikesVal,
+      twitterFollowers: twitterFollowersVal,
+      facebookFollowers: facebookFollowersVal,
+      youtubeSubscribers: youtubeSubscribersVal,
       appleMusicFollowers,
       appleMusicListeners,
     };
 
     await upsertWeeklySnapshot(snapshot);
+    snapshotsCreated++;
+    
+    // Debug log for first few snapshots
+    if (snapshotsCreated <= 2) {
+      console.log(`Snapshot for ${weekStart}: Spotify followers=${spotifyFollowersVal}, Listeners=${spotifyListenersVal}, Instagram=${instagramFollowersVal}`);
+    }
   }
 
-  console.log(`✅ Upserted ${weekDates.length} weekly snapshots (${weekDates[0]} to ${weekDates[weekDates.length - 1]})`);
+  console.log(`✅ Upserted ${snapshotsCreated} weekly snapshots (${weekDates[0]} to ${weekDates[weekDates.length - 1]})`);
 
   return {
     artistId: artist.id,
